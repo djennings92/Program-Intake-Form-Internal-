@@ -97,6 +97,23 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--teal);bo
 .clash b{display:block;margin-bottom:3px;color:#4d3500}
 .allgood{text-align:center;padding:22px 10px;color:var(--ok);font-size:13.5px;font-weight:600}
 
+/* count results grids */
+.crg{border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#fff}
+.crg-r{display:grid;gap:5px;align-items:center;padding:6px 8px;border-top:1px solid var(--line2)}
+.crg-r:first-child{border-top:none}
+.crg-h{background:#fbfcfd;font-size:9.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--ink3);padding:8px;line-height:1.25}
+.crg-r input{padding:6px 8px;font-size:12.5px;border-radius:6px}
+.crg-x{border:1px solid var(--line);background:#fff;border-radius:6px;height:28px;color:var(--ink3);
+  font-size:15px;line-height:1}
+.crg-x:hover{border-color:var(--g1);color:var(--g1);background:#fdecea}
+.crg-empty{font-size:12.5px;color:var(--ink3);font-style:italic;padding:12px;border:1px dashed var(--line);
+  border-radius:9px;background:#fcfdfe}
+.cr-note{font-size:12.5px;line-height:1.5;border-radius:8px;padding:10px 13px;margin-top:9px;border:1px solid}
+.cr-note.good{background:var(--okbg,#e8f5ee);border-color:#b6ddca;color:#0d7d5a}
+.cr-note.warn{background:#fdf3e0;border-color:#f0dcb4;color:#8a6100}
+.cr-note.bad{background:#fdecea;border-color:#f5c9c5;color:#b3261e}
+
 /* import / inferred marking */
 .fld.inf{border-left:3px solid var(--inferred,#9a6b00);padding-left:11px;
   background:linear-gradient(90deg,#fdf3e0 0%,transparent 60%);border-radius:0 6px 6px 0}
@@ -388,18 +405,35 @@ dialog .df button.pri{background:var(--teal);border-color:var(--teal);color:#fff
             <b>Copy as table</b> pastes formatted straight into the Salesforce rich-text field.
           </p>
           <div class="row">
-            <div class="fld"><label>Regions <span class="hint">Comma separated. One row each.</span></label>
-              <input type="text" id="crRegions" placeholder="AU" oninput="paintCR()"></div>
             <div class="fld"><label>Contact breakdown columns
               <span class="hint">Extra columns beside Total Contacts, e.g. Manager+, Practitioner+. Leave blank for none.</span></label>
-              <input type="text" id="crCols" placeholder="Manager+, Practitioner+" oninput="paintCR()"></div>
+              <input type="text" id="crCols" placeholder="Manager+, Practitioner+" oninput="rebuildCR()"></div>
+            <div class="fld"><label>&nbsp;</label>
+              <label class="chk"><input type="checkbox" id="crTiers" onchange="rebuildCR()">
+                <span>TAL is tiered — add a Tier 1/2/3 table</span></label>
+              <label class="chk"><input type="checkbox" id="crSummary" onchange="rebuildCR()">
+                <span>Add a plain summary table</span></label></div>
           </div>
-          <label class="chk"><input type="checkbox" id="crTiers" onchange="paintCR()">
-            <span>TAL is tiered — add a Tier 1/2/3 breakdown table</span></label>
-          <label class="chk"><input type="checkbox" id="crSummary" onchange="paintCR()">
-            <span>Add a plain summary table (Available / Matched / Total Contacts)</span></label>
 
-          <div id="crPreview" style="margin-top:14px"></div>
+          <div class="fld full"><label>Regions
+            <span class="hint">One row per market. Leave the number cells blank to hand the empty shell to the data team — key their figures back in when the count lands and the checks below come alive.</span></label>
+            <div id="crRegGrid"></div>
+            <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+              <button type="button" class="addrow" style="margin:0;padding:6px 12px;font-size:12.5px" onclick="addRegion()">+ add region</button>
+              <button type="button" class="addrow" style="margin:0;padding:6px 12px;font-size:12.5px" onclick="regionsFromGeo()">use target geographies</button>
+            </div>
+          </div>
+
+          <div class="fld full" id="crSrcBox"><label>TAL source lists <span style="font-weight:450;color:var(--ink3)">optional</span>
+            <span class="hint">Breaks the TAL down by where accounts came from — delegate list, MQL export, client Tier 1 file. Gives match rate per source instead of one blended number, which matters when one list is far warmer than another.</span></label>
+            <div id="crSrcGrid"></div>
+            <button type="button" class="addrow" style="margin-top:8px;padding:6px 12px;font-size:12.5px" onclick="addSource()">+ add source list</button>
+          </div>
+
+          <div style="font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink3);margin:18px 0 6px">
+            Preview — this is exactly what pastes</div>
+          <div id="crPreview"></div>
+          <div id="crChecks"></div>
           <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
             <button type="button" class="addrow" style="margin:0;border-style:solid;border-color:var(--teal);color:var(--teal)"
               onclick="copyCR()">Copy as table</button>
@@ -780,7 +814,7 @@ function render(skipOutcomeRepaint){
       .sort((a,b)=>SENIORITY.indexOf(a)-SENIORITY.indexOf(b)).map(l=>SEN_SHORT[l]).filter(Boolean);
     $('crCols').placeholder = lv.length>1 ? lv.join(', ') : 'Manager+, Practitioner+';
   }
-  paintCR();
+  rebuildCR();
 
   /* gaps */
   const G=[];
@@ -1034,58 +1068,153 @@ function guessRegions(){
   for(const k in GEO_MAP) if(key===k) return GEO_MAP[k];
   return g.split(/[,/&]| and /i).map(s=>s.replace(/\bonly\b/i,'').trim()).filter(Boolean);
 }
-const CR_CSS_T='border-collapse:collapse;margin:0 0 14px;font-family:Arial,sans-serif;font-size:13px';
-const CR_CSS_TH='border:1px solid #000;padding:5px 9px;background:#f2f2f2;font-weight:bold;text-align:left';
-const CR_CSS_TD='border:1px solid #000;padding:5px 9px';
-function crTable(title, headers, rows){
-  let h='';
-  if(title) h+=`<p style="margin:0 0 4px;font-family:Arial,sans-serif;font-size:13px"><b>${title}</b></p>`;
-  h+=`<table border="1" cellspacing="0" cellpadding="4" style="${CR_CSS_T}"><thead><tr>`;
-  headers.forEach(c=>h+=`<th style="${CR_CSS_TH}">${c}</th>`);
-  h+='</tr></thead><tbody>';
-  rows.forEach(r=>{
-    h+='<tr>';
-    headers.forEach((_,i)=>h+=`<td style="${CR_CSS_TD}">${r[i]!==undefined?r[i]:'&nbsp;'}</td>`);
-    h+='</tr>';
+/* editable state */
+let CR_REG=[{name:'',talAcc:'',talMatch:'',talCont:'',wsAcc:'',wsCont:''}];
+let CR_SRC=[];
+let CR_TIER=[{name:'Tier 1',acc:'',match:'',cont:''},{name:'Tier 2',acc:'',match:'',cont:''},{name:'Tier 3',acc:'',match:'',cont:''}];
+const TALC=[{k:'talAcc',l:'Accounts on TAL'},{k:'talMatch',l:'TAL Matched'},{k:'talCont',l:'Total Contacts'}];
+const WSC =[{k:'wsAcc',l:'Available Accounts'},{k:'wsCont',l:'Total Contacts'}];
+const SRCC=[{k:'acc',l:'Accounts'},{k:'cont',l:'Contacts supplied'},{k:'match',l:'Matched'},{k:'rel',l:'Relevant Contacts'}];
+const TIERC=[{k:'acc',l:'Available Accounts'},{k:'match',l:'Matched Accounts'},{k:'cont',l:'Relevant Contacts'}];
+const crN = x => { const f=parseFloat(x); return isFinite(f)?f:null; };
+const crSum = (arr,k) => arr.reduce((a,r)=>a+(crN(r[k])||0),0);
+const crAny = (arr,k) => arr.some(r=>crN(r[k])!==null);
+const crFmt = n => Number(n).toLocaleString('en-AU',{maximumFractionDigits:0});
+const crEsc = s => String(s==null?'':s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+function crIsTAL(){const t=v('tgtType');return t==='Targeted Account List (TAL)'||t==='TAL + Whitespace';}
+function crIsWS(){const t=v('tgtType');return t==='Whitespace Only'||t==='TAL + Whitespace';}
+function crExtra(){return (v('crCols')||'').split(',').map(s=>s.trim()).filter(Boolean);}
+
+function crGrid(arr, cols, firstLabel, placeholder, tag){
+  const gt=`1.3fr repeat(${cols.length},1fr) 30px`;
+  let h=`<div class="crg"><div class="crg-r crg-h" style="grid-template-columns:${gt}">
+    <div>${firstLabel}</div>${cols.map(c=>`<div>${c.l}</div>`).join('')}<div></div></div>`;
+  arr.forEach((r,i)=>{
+    h+=`<div class="crg-r" style="grid-template-columns:${gt}">
+      <input type="text" data-cr="${tag}" data-i="${i}" data-k="name" value="${crEsc(r.name)}" placeholder="${placeholder}">
+      ${cols.map(c=>`<input type="number" min="0" data-cr="${tag}" data-i="${i}" data-k="${c.k}" value="${crEsc(r[c.k])}" placeholder="—">`).join('')}
+      <button type="button" class="crg-x" onclick="crDel('${tag}',${i})" title="Remove">&times;</button></div>`;
   });
-  return h+'</tbody></table>';
+  return h+'</div>';
+}
+function crCols2(){
+  let c=[];
+  if(crIsTAL()) c=c.concat(TALC);
+  if(crIsWS())  c=c.concat(WSC);
+  crExtra().forEach((l,i)=>c.push({k:'x'+i,l}));
+  return c;
+}
+function rebuildCR(){
+  const rg=$('crRegGrid'); if(!rg) return;
+  if(!v('tgtType')){
+    rg.innerHTML='<div class="crg-empty">Select a targeting type first &mdash; it decides which columns appear.</div>';
+    $('crSrcBox').classList.add('hide'); paintCR(); return;
+  }
+  rg.innerHTML=crGrid(CR_REG, crCols2(), 'Region', 'e.g. Australia', 'reg');
+  $('crSrcBox').classList.toggle('hide', !crIsTAL());
+  const sg=$('crSrcGrid');
+  sg.innerHTML = CR_SRC.length
+    ? crGrid(CR_SRC, SRCC, 'Source list', 'e.g. 2026 delegate list', 'src')
+    : '<div class="crg-empty">No source breakdown &mdash; the TAL shows as a single blended row.</div>';
+  paintCR();
+}
+document.addEventListener('input',e=>{
+  const t=e.target; if(!t.dataset || !t.dataset.cr) return;
+  const arr = t.dataset.cr==='reg'?CR_REG : t.dataset.cr==='src'?CR_SRC : CR_TIER;
+  arr[+t.dataset.i][t.dataset.k]=t.value; paintCR();
+});
+function crDel(tag,i){
+  const arr = tag==='reg'?CR_REG : tag==='src'?CR_SRC : CR_TIER;
+  arr.splice(i,1); if(tag==='reg'&&!arr.length) arr.push({name:''});
+  rebuildCR();
+}
+function addRegion(){ CR_REG.push({name:''}); rebuildCR(); }
+function addSource(){ CR_SRC.push({name:'',acc:'',cont:'',match:'',rel:''}); rebuildCR(); }
+function regionsFromGeo(){
+  const g=guessRegions();
+  if(!g.length){ $('crMsg').innerHTML='<span class="err-msg">Nothing to read &mdash; fill in Target Geographies first.</span>'; return; }
+  const keep={}; CR_REG.forEach(r=>{ if(r.name) keep[r.name]=r; });
+  CR_REG = g.map(n=>keep[n]||{name:n});
+  rebuildCR();
+  $('crMsg').innerHTML=`<span class="ok-msg">${g.length} region${g.length>1?'s':''} from "${v('geo')}".</span>`;
+}
+
+const CR_FF="font-family:'Salesforce Sans',Arial,sans-serif;font-size:13px;color:#000;";
+const CR_TD='border:1px solid #000;padding:6px 10px;';
+const CR_TH=CR_TD+'font-weight:bold;background:#f2f2f2;text-align:left;';
+const crCell=(val,head)=>`<td style="${head?CR_TH:CR_TD}">${val===''||val==null?'&nbsp;':crEsc(val)}</td>`;
+function crBlock(arr, cols, firstLabel, title){
+  const R=arr.filter(r=>String(r.name||'').trim()||cols.some(c=>String(r[c.k]||'').trim()));
+  if(!R.length) return '';
+  let rows=`<tr>${crCell(firstLabel,1)}${cols.map(c=>crCell(c.l,1)).join('')}</tr>`;
+  R.forEach(r=>{ rows+=`<tr>${crCell(r.name||'—')}${cols.map(c=>crCell(r[c.k])).join('')}</tr>`; });
+  if(R.length>1)
+    rows+=`<tr>${crCell('Total',1)}${cols.map(c=>crCell(crAny(R,c.k)?crFmt(crSum(R,c.k)):'',1)).join('')}</tr>`;
+  return `<p style="${CR_FF}margin:0 0 6px"><b>${title}</b></p>`
+    +`<table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse;${CR_FF}margin:0 0 14px">${rows}</table>`;
 }
 function buildCR(){
-  const tt=v('tgtType');
-  const isTAL = tt==='Targeted Account List (TAL)' || tt==='TAL + Whitespace';
-  const isWS  = tt==='Whitespace Only' || tt==='TAL + Whitespace';
-  const regions=(v('crRegions')||guessRegions().join(', ')).split(',').map(s=>s.trim()).filter(Boolean);
-  const rows = regions.length?regions:[''];
-  const extra=(v('crCols')||'').split(',').map(s=>s.trim()).filter(Boolean);
-  let h='';
-  if(!tt) return '<p style="font-family:Arial,sans-serif;font-size:13px">Select a targeting type to generate the template.</p>';
-  if(isTAL)
-    h+=crTable('TAL', ['Region','Accounts on TAL','TAL Matched','Total Contacts',...extra],
-       rows.map(r=>[r]));
-  if(isWS)
-    h+=crTable('Whitespace', ['Region','Available Accounts','Total Contacts',...extra],
-       rows.map(r=>[r]));
-  if(ck('crTiers') && isTAL)
-    h+=crTable('TAL by tier', ['TAL','Available Accounts','Matched Accounts','Relevant Contacts'],
-       ['Tier 1','Tier 2','Tier 3'].map(t=>[t]));
-  if(ck('crSummary'))
-    h+=crTable('Summary', ['Available Accounts','Matched Accounts','Total Contacts',...extra], [[],[]]);
-  return h;
+  if(!v('tgtType')) return '';
+  const ex=crExtra().map((l,i)=>({k:'x'+i,l}));
+  let out='';
+  if(crIsTAL()){
+    out+=crBlock(CR_REG,[...TALC,...ex],'Region','TAL — Targeted Account List');
+    if(CR_SRC.length) out+=crBlock(CR_SRC,SRCC,'Source list','TAL composition — accounts by source list');
+    if(ck('crTiers'))  out+=crBlock(CR_TIER,TIERC,'TAL','TAL by tier');
+  }
+  if(crIsWS()) out+=crBlock(CR_REG,[...WSC,...ex],'Region','Whitespace');
+  if(ck('crSummary')){
+    const c=[{k:'sAcc',l:'Available Accounts'},{k:'sMatch',l:'Matched Accounts'},{k:'sCont',l:'Total Contacts'},...ex];
+    out+=crBlock([{name:' '},{name:' '}],c,'','Summary');
+  }
+  return out;
 }
 function paintCR(){
   const el=$('crPreview'); if(!el) return;
-  if($('crRegions') && !$('crRegions').value){
-    $('crRegions').placeholder = guessRegions().join(', ') || 'AU';
-  }
-  el.innerHTML=`<div style="border:1px solid var(--line);border-radius:9px;padding:14px;background:#fff;overflow:auto">${buildCR()}</div>`;
+  const h=buildCR();
+  el.innerHTML=`<div style="border:1px solid var(--line);border-radius:9px;padding:14px;background:#fff;overflow:auto">${
+    h||'<span style="font-size:13px;color:var(--ink3);font-style:italic">Pick a targeting type and add a region to build the tables.</span>'}</div>`;
+  crChecks();
 }
 function crPlainText(){
   const d=document.createElement('div'); d.innerHTML=buildCR();
-  return [...d.children].map(n=>{
-    if(n.tagName==='P') return n.textContent;
-    return [...n.querySelectorAll('tr')].map(tr=>
-      [...tr.children].map(c=>c.textContent.replace(/ /g,'')).join('\t')).join('\n');
-  }).join('\n')+'\n';
+  const o=[];
+  [...d.children].forEach(n=>{
+    if(n.tagName==='P'){ const t=n.textContent.trim(); if(t) o.push(t); }
+    else { n.querySelectorAll('tr').forEach(tr=>
+      o.push([...tr.children].map(c=>c.textContent.replace(/ /g,'').trim()).join('\t'))); o.push(''); }
+  });
+  return o.join('\n');
+}
+function crChecks(){
+  const box=$('crChecks'); if(!box) return;
+  const m=[];
+  const acc=crSum(CR_REG,'talAcc'), match=crSum(CR_REG,'talMatch');
+  if(crIsTAL() && acc && match){
+    const r=match/acc*100;
+    const cls = r<50?'bad' : r<70?'warn' : 'good';
+    const tail = r<50 ? ' The TAL cannot carry this on its own — push volume to whitespace or go back for a wider list.'
+      : r<70 ? ' Workable but thin. Have the whitespace fallback ready before committing volume.' : '';
+    m.push({cls, t:`<b>TAL match rate ${r.toFixed(0)}%</b> — ${crFmt(match)} of ${crFmt(acc)} accounts matched.${tail}`});
+  }
+  if(crIsTAL() && CR_SRC.length){
+    const s=crSum(CR_SRC,'acc');
+    if(acc && s && s!==acc)
+      m.push({cls:'warn', t:`<b>Source rows total ${crFmt(s)} accounts but the TAL rows say ${crFmt(acc)}.</b> Fine if duplicates across lists have been stripped — worth a note in the field so nobody reads it as an error.`});
+  }
+  if(crIsTAL() && match){
+    OUTCOMES.filter(o=>o.type&&num(o.vol)).forEach(o=>{
+      const cap=num(o.max)||2, capped=match*cap, vol=num(o.vol);
+      if(vol>capped)
+        m.push({cls:'bad', t:`<b>${o.type} is undeliverable on TAL alone.</b> ${crFmt(vol)} leads at a cap of ${cap} per account needs ${crFmt(Math.ceil(vol/cap))} matched accounts — you have ${crFmt(match)}, which yields ${crFmt(capped)}. Short by ${crFmt(vol-capped)}.`});
+      else if(vol>capped*0.8)
+        m.push({cls:'warn', t:`<b>${o.type} uses ${(vol/capped*100).toFixed(0)}% of TAL capacity.</b> ${crFmt(vol)} leads against ${crFmt(capped)} available at ${cap} per account — very little headroom.`});
+    });
+  }
+  const wsCont=crSum(CR_REG,'wsCont');
+  if(crIsWS() && wsCont && totalLeads() && wsCont < totalLeads()*20)
+    m.push({cls:'warn', t:`<b>Whitespace contact pool is thin.</b> ${crFmt(wsCont)} contacts against ${crFmt(totalLeads())} leads is ${(wsCont/totalLeads()).toFixed(0)}:1 — content syndication typically needs a good deal more reach than that.`});
+  box.innerHTML=m.map(x=>`<div class="cr-note ${x.cls}">${x.t}</div>`).join('');
 }
 async function copyCR(){
   const html=buildCR(), plain=crPlainText();
@@ -1120,7 +1249,7 @@ const TEXT_FIELDS = ['vendor','countDue','start','end','jobEnd','progName','job'
   'owner','csm','geo','tgtType','talGeo','exclTrumps','talNotes','otherFirmo','exclNotes',
   'personaMode','seniority','titles','falsePos','falsePos2','falsePos3','personaOther','dataNotes',
   'journey','kpi','cplApproved','volNotes','desc','orderStatus','reporting','split','pacing',
-  'genInstr','assets','script','crRegions','crCols'];
+  'genInstr','assets','script','crCols'];
 const CHECK_FIELDS = ['talCampaign','talUploaded','wsCampaign','exclProvided','dedupe','exclIT','assetsUp',
   'crTiers','crSummary'];
 
@@ -1166,6 +1295,10 @@ function buildPayload(){
   if(Object.keys(sen).length) p.seniorityByFunction=sen;
   const oc=OUTCOMES.filter(o=>o.type||o.vol||o.cpl);
   if(oc.length) p.outcomes=oc.map(o=>({type:o.type,crit:o.crit,vol:o.vol,max:o.max,cpl:o.cpl}));
+  const rg=CR_REG.filter(r=>String(r.name||'').trim());
+  if(rg.length) p.countRegions=rg;
+  if(CR_SRC.length) p.countSources=CR_SRC;
+  if(ck('crTiers')) p.countTiers=CR_TIER;
   return p;
 }
 function applyPayload(p){
@@ -1180,7 +1313,10 @@ function applyPayload(p){
     ? p.outcomes.map(o=>({type:o.type||'',crit:o.crit||'',vol:o.vol??'',max:o.max??'',cpl:o.cpl??''}))
     : [{type:'',crit:'',vol:'',max:'',cpl:''}];
   paintOutcomes();
-  render();
+  CR_REG = (p.countRegions&&p.countRegions.length) ? p.countRegions.map(r=>({...r})) : [{name:''}];
+  CR_SRC = (p.countSources||[]).map(r=>({...r}));
+  if(p.countTiers&&p.countTiers.length) CR_TIER=p.countTiers.map(r=>({...r}));
+  render(); rebuildCR();
   markInferred(p.inferred||[]);
 }
 function markInferred(keys){
