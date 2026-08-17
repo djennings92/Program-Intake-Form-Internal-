@@ -379,6 +379,34 @@ dialog .df button.pri{background:var(--teal);border-color:var(--teal);color:#fff
           <div class="fld"><label>False positives to exclude<span class="req">*</span></label>
             <textarea id="falsePos2" oninput="render()"></textarea></div>
         </div>
+
+        <!-- COUNT RESULTS TEMPLATE -->
+        <div style="border-top:1px solid var(--line);margin:22px 0 0;padding-top:18px">
+          <div class="ct" style="color:var(--teal)">Count results template</div>
+          <p style="margin:0 0 14px;font-size:13px;color:var(--ink2);line-height:1.55">
+            The empty grid the data team fills in. Shapes itself to your targeting type.
+            <b>Copy as table</b> pastes formatted straight into the Salesforce rich-text field.
+          </p>
+          <div class="row">
+            <div class="fld"><label>Regions <span class="hint">Comma separated. One row each.</span></label>
+              <input type="text" id="crRegions" placeholder="AU" oninput="paintCR()"></div>
+            <div class="fld"><label>Contact breakdown columns
+              <span class="hint">Extra columns beside Total Contacts, e.g. Manager+, Practitioner+. Leave blank for none.</span></label>
+              <input type="text" id="crCols" placeholder="Manager+, Practitioner+" oninput="paintCR()"></div>
+          </div>
+          <label class="chk"><input type="checkbox" id="crTiers" onchange="paintCR()">
+            <span>TAL is tiered — add a Tier 1/2/3 breakdown table</span></label>
+          <label class="chk"><input type="checkbox" id="crSummary" onchange="paintCR()">
+            <span>Add a plain summary table (Available / Matched / Total Contacts)</span></label>
+
+          <div id="crPreview" style="margin-top:14px"></div>
+          <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+            <button type="button" class="addrow" style="margin:0;border-style:solid;border-color:var(--teal);color:var(--teal)"
+              onclick="copyCR()">Copy as table</button>
+            <button type="button" class="addrow" style="margin:0" onclick="copyCRHtml()">Copy HTML source</button>
+          </div>
+          <div id="crMsg" style="margin-top:8px;font-size:13px"></div>
+        </div>
       </div>
     </div>
 
@@ -745,6 +773,14 @@ function render(skipOutcomeRepaint){
   paintCounts(tree, INDUSTRIES);
   paintCounts(ftree, FUNCTIONS);
   if(isFS) paintMatrix();
+  const SEN_SHORT={'Practitioner/Specialist':'Practitioner+','Manager/Lead':'Manager+',
+    'Director/Head':'Director+','Executive/C-Level':'C-Level','Business Partner/Advisor':'Business Partner'};
+  if($('crCols') && !$('crCols').value){
+    const lv=[...new Set((isFS?personaPairs():[]).flatMap(p=>p.levels))]
+      .sort((a,b)=>SENIORITY.indexOf(a)-SENIORITY.indexOf(b)).map(l=>SEN_SHORT[l]).filter(Boolean);
+    $('crCols').placeholder = lv.length>1 ? lv.join(', ') : 'Manager+, Practitioner+';
+  }
+  paintCR();
 
   /* gaps */
   const G=[];
@@ -937,6 +973,11 @@ function buildText(){
   }
   add('Notes to Data',v('dataNotes'));
   add('False positives to exclude (for the Boolean)', v('falsePos')||v('falsePos2')||v('falsePos3'));
+  if(v('tgtType')){
+    L.push('');
+    L.push('Count Results Template — use the "Copy as table" button to paste this formatted into Salesforce');
+    crPlainText().trimEnd().split('\n').forEach(r=>L.push('  '+r));
+  }
   L.push(''); L.push('== TAB 3 · MAX AVAILS & PRICING ==');
   const fo=OUTCOMES.filter(o=>o.type||num(o.vol)||num(o.cpl));
   if(fo.length){
@@ -983,13 +1024,105 @@ function copyDlg(b){ navigator.clipboard.writeText($('dlgB').textContent);
   const t=b.textContent;b.textContent='Copied';setTimeout(()=>b.textContent=t,1100); }
 function copyTsv(){ navigator.clipboard.writeText(buildText()); }
 
+/* ---------- count results template ---------- */
+const GEO_MAP = {'anz':['AU','NZ'],'au only':['AU'],'australia':['AU'],'apac':['AU','NZ','SG','IN','MY','PH'],
+  'apjc':['AU','NZ','SG','IN','MY','PH','JP'],'apj':['AU','NZ','SG','IN','JP']};
+function guessRegions(){
+  const g=v('geo'); if(!g) return [];
+  const key=g.toLowerCase().trim();
+  if(GEO_MAP[key]) return GEO_MAP[key];
+  for(const k in GEO_MAP) if(key===k) return GEO_MAP[k];
+  return g.split(/[,/&]| and /i).map(s=>s.replace(/\bonly\b/i,'').trim()).filter(Boolean);
+}
+const CR_CSS_T='border-collapse:collapse;margin:0 0 14px;font-family:Arial,sans-serif;font-size:13px';
+const CR_CSS_TH='border:1px solid #000;padding:5px 9px;background:#f2f2f2;font-weight:bold;text-align:left';
+const CR_CSS_TD='border:1px solid #000;padding:5px 9px';
+function crTable(title, headers, rows){
+  let h='';
+  if(title) h+=`<p style="margin:0 0 4px;font-family:Arial,sans-serif;font-size:13px"><b>${title}</b></p>`;
+  h+=`<table border="1" cellspacing="0" cellpadding="4" style="${CR_CSS_T}"><thead><tr>`;
+  headers.forEach(c=>h+=`<th style="${CR_CSS_TH}">${c}</th>`);
+  h+='</tr></thead><tbody>';
+  rows.forEach(r=>{
+    h+='<tr>';
+    headers.forEach((_,i)=>h+=`<td style="${CR_CSS_TD}">${r[i]!==undefined?r[i]:'&nbsp;'}</td>`);
+    h+='</tr>';
+  });
+  return h+'</tbody></table>';
+}
+function buildCR(){
+  const tt=v('tgtType');
+  const isTAL = tt==='Targeted Account List (TAL)' || tt==='TAL + Whitespace';
+  const isWS  = tt==='Whitespace Only' || tt==='TAL + Whitespace';
+  const regions=(v('crRegions')||guessRegions().join(', ')).split(',').map(s=>s.trim()).filter(Boolean);
+  const rows = regions.length?regions:[''];
+  const extra=(v('crCols')||'').split(',').map(s=>s.trim()).filter(Boolean);
+  let h='';
+  if(!tt) return '<p style="font-family:Arial,sans-serif;font-size:13px">Select a targeting type to generate the template.</p>';
+  if(isTAL)
+    h+=crTable('TAL', ['Region','Accounts on TAL','TAL Matched','Total Contacts',...extra],
+       rows.map(r=>[r]));
+  if(isWS)
+    h+=crTable('Whitespace', ['Region','Available Accounts','Total Contacts',...extra],
+       rows.map(r=>[r]));
+  if(ck('crTiers') && isTAL)
+    h+=crTable('TAL by tier', ['TAL','Available Accounts','Matched Accounts','Relevant Contacts'],
+       ['Tier 1','Tier 2','Tier 3'].map(t=>[t]));
+  if(ck('crSummary'))
+    h+=crTable('Summary', ['Available Accounts','Matched Accounts','Total Contacts',...extra], [[],[]]);
+  return h;
+}
+function paintCR(){
+  const el=$('crPreview'); if(!el) return;
+  if($('crRegions') && !$('crRegions').value){
+    $('crRegions').placeholder = guessRegions().join(', ') || 'AU';
+  }
+  el.innerHTML=`<div style="border:1px solid var(--line);border-radius:9px;padding:14px;background:#fff;overflow:auto">${buildCR()}</div>`;
+}
+function crPlainText(){
+  const d=document.createElement('div'); d.innerHTML=buildCR();
+  return [...d.children].map(n=>{
+    if(n.tagName==='P') return n.textContent;
+    return [...n.querySelectorAll('tr')].map(tr=>
+      [...tr.children].map(c=>c.textContent.replace(/ /g,'')).join('\t')).join('\n');
+  }).join('\n')+'\n';
+}
+async function copyCR(){
+  const html=buildCR(), plain=crPlainText();
+  try{
+    await navigator.clipboard.write([new ClipboardItem({
+      'text/html': new Blob([html],{type:'text/html'}),
+      'text/plain': new Blob([plain],{type:'text/plain'})
+    })]);
+    $('crMsg').innerHTML='<span class="ok-msg">Copied as a table.</span> Paste into the Count Results Template field in Salesforce.';
+  }catch(e){
+    // fallback for browsers that block ClipboardItem
+    const d=document.createElement('div');
+    d.contentEditable=true; d.innerHTML=html;
+    d.style.cssText='position:fixed;left:-9999px;top:0';
+    document.body.appendChild(d);
+    const r=document.createRange(); r.selectNodeContents(d);
+    const s=getSelection(); s.removeAllRanges(); s.addRange(r);
+    const ok=document.execCommand('copy');
+    s.removeAllRanges(); d.remove();
+    $('crMsg').innerHTML = ok
+      ? '<span class="ok-msg">Copied as a table.</span> Paste into the Count Results Template field in Salesforce.'
+      : '<span class="err-msg">Copy blocked by the browser.</span> Use Copy HTML source instead.';
+  }
+}
+function copyCRHtml(){
+  navigator.clipboard.writeText(buildCR());
+  $('crMsg').innerHTML='<span class="ok-msg">HTML source copied.</span> Use this if you are pasting into a code view.';
+}
+
 /* ---------- import / export ---------- */
 const TEXT_FIELDS = ['vendor','countDue','start','end','jobEnd','progName','job','ccy','status',
   'owner','csm','geo','tgtType','talGeo','exclTrumps','talNotes','otherFirmo','exclNotes',
   'personaMode','seniority','titles','falsePos','falsePos2','falsePos3','personaOther','dataNotes',
   'journey','kpi','cplApproved','volNotes','desc','orderStatus','reporting','split','pacing',
-  'genInstr','assets','script'];
-const CHECK_FIELDS = ['talCampaign','talUploaded','wsCampaign','exclProvided','dedupe','exclIT','assetsUp'];
+  'genInstr','assets','script','crRegions','crCols'];
+const CHECK_FIELDS = ['talCampaign','talUploaded','wsCampaign','exclProvided','dedupe','exclIT','assetsUp',
+  'crTiers','crSummary'];
 
 function treeToObj(el,DATA){
   const o={};
