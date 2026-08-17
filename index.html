@@ -256,8 +256,9 @@ dialog .df button.pri{background:var(--teal);border-color:var(--teal);color:#fff
             <div class="tree" id="tree"></div></div>
 
           <div class="fld full"><label>Target employee size range<span class="req">*</span>
-            <span class="hint">No SMB band exists — the picker starts at 201.</span></label>
-            <div class="chkgrid" id="sizeGrid"></div></div>
+            <span class="hint">Eight bands from 1-10 up. SMB = 1-10, 11-50, 51-200 · mid-market = 201-500, 501-1,000 · enterprise = 1,001 and above.</span></label>
+            <div class="chkgrid" id="sizeGrid"></div>
+            <div id="sizeNote" style="font-size:12.5px;color:var(--ink3);margin-top:6px"></div></div>
 
           <div class="fld full"><label>Other firmographic parameters
             <span class="hint">Park anything that doesn't map cleanly to a sub-industry here.</span></label>
@@ -463,7 +464,8 @@ const FUNCTIONS = [
   {n:"Business Partner / Advisory", subs:null}
 ];
 const SENIORITY = ["Practitioner/Specialist","Manager/Lead","Director/Head","Executive/C-Level","Business Partner/Advisor"];
-const SIZES = ["201-500","501-1,000","1,001-5,000","5,001-10,000","10,001+"];
+const SIZES = ["1-10","11-50","51-200","201-500","501-1,000","1,001-5,000","5,001-10,000","10,001+"];
+const SMB_BANDS = ["1-10","11-50","51-200"];
 
 /* ---------- build pickers ---------- */
 function buildTree(el, DATA){
@@ -713,8 +715,18 @@ function render(){
     C.push(['Cybersecurity as industry vs audience','You have selected the <b>Cybersecurity</b> sub-industry on a security-themed program. That targets security <i>vendors</i>. If you want security buyers inside other verticals, this belongs in the persona, not the industry.']);
   const totalSubs = selectedIndustries().reduce((a,x)=>a+x.n,0);
   if(needFirmo && totalSubs>=25) C.push(['Broad industry selection',`${totalSubs} sub-industries selected across ${ind0.length} verticals. Worth confirming the client wants this breadth — wide nets inflate the count and produce leads they later reject.`]);
-  if(needFirmo && sizes().length && !sizes().includes('201-500') && !sizes().includes('501-1,000') && n>=100)
-    C.push(['Enterprise-only at volume','Enterprise-only bands with a high lead target — check the matched universe supports it.']);
+  const sz=sizes(), smb=sz.filter(s=>SMB_BANDS.includes(s)), ent=sz.filter(s=>['1,001-5,000','5,001-10,000','10,001+'].includes(s));
+  $('sizeNote').textContent = !sz.length ? '' :
+    `${sz.length} of 8 bands` + (smb.length&&ent.length? ' — spans SMB through enterprise, which is very wide for one audience.' :
+      smb.length&&!ent.length? ' — SMB and below only.' : ent.length&&!smb.length? ' — enterprise only.' : '.');
+  if(needFirmo && ent.length && !smb.length && !sz.includes('201-500') && !sz.includes('501-1,000') && n>=100)
+    C.push(['Enterprise-only at volume','Enterprise bands only against a high lead target — check the matched universe supports it before committing.']);
+  if(needFirmo && smb.length && ent.length)
+    C.push(['Audience spans SMB to enterprise',`Bands run from ${sz[0]} to ${sz[sz.length-1]}. A 5-person business and a 20,000-person one do not buy the same way — confirm this is deliberate, or the messaging and script will fit neither.`]);
+  if(needFirmo && sz.includes('1-10') && setPairs.some(p=>p.levels.includes('Director/Head')||p.levels.includes('Executive/C-Level')))
+    C.push(['Director titles at 1-10 employees','You have <b>1-10 employees</b> ticked alongside Director/Head or C-Level personas. Businesses that size rarely carry those titles — expect owner, founder or principal instead, and a thin count.']);
+  if(needFirmo && smb.length && /bant/i.test(v('lt1')+v('lt2')) && +v('cpl')>=300)
+    C.push(['High BANT CPL against SMB',`CPL of ${v('cpl')} on a BANT product with SMB bands ticked. Small businesses often fail the budget and timeline criteria — check the rate holds against the likely rejection rate.`]);
   if(talOnly && (totalSubs>0 || sizes().length))
     C.push(['Firmographics set on a TAL-only campaign','Industries or company sizes are ticked but targeting is TAL/ABM only, so they filter nothing. Either clear them or switch to TAL + Whitespace.']);
   const lead = v('countDue') && v('start')
