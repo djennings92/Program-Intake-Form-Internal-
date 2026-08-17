@@ -97,6 +97,15 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--teal);bo
 .clash b{display:block;margin-bottom:3px;color:#4d3500}
 .allgood{text-align:center;padding:22px 10px;color:var(--ok);font-size:13.5px;font-weight:600}
 
+/* import / inferred marking */
+.fld.inf{border-left:3px solid var(--inferred,#9a6b00);padding-left:11px;
+  background:linear-gradient(90deg,#fdf3e0 0%,transparent 60%);border-radius:0 6px 6px 0}
+.fld.inf > label::after{content:"inferred — check this";margin-left:8px;font-size:10.5px;
+  font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:#9a6b00;
+  background:#fdf3e0;padding:2px 7px;border-radius:4px;vertical-align:middle}
+.ok-msg{color:#1b7f4f;font-weight:650}
+.err-msg{color:#b3261e;font-weight:650}
+
 /* outcomes table */
 .ot{border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#fff}
 .ot-r{display:grid;grid-template-columns:1.5fr 1.6fr .7fr .7fr .8fr .95fr 34px;
@@ -169,6 +178,28 @@ dialog .df button.pri{background:var(--teal);border-color:var(--teal);color:#fff
   </div>
 
   <main>
+    <!-- IMPORT -->
+    <div class="card" id="importCard">
+      <div class="hd"><span class="n">0</span><h2>Start from a document</h2></div>
+      <div class="bd">
+        <p style="margin:0 0 12px;font-size:13.5px;color:var(--ink2);line-height:1.55">
+          Give Claude the SOW, email chain, transcript or media brief and ask for a
+          <b>program brief prefill</b>. Paste the code it returns here and every field below fills in —
+          with anything it inferred marked amber so you can check it.
+          <br><span style="color:var(--ink3)">Also how you save your work: hit Export at any point, keep the code, paste it back later.</span>
+        </p>
+        <textarea id="importBox" style="min-height:88px;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"
+          placeholder="Paste prefill code here…"></textarea>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <button type="button" class="addrow" style="border-style:solid;border-color:var(--teal);color:var(--teal);margin:0"
+            onclick="doImport()">Import &amp; fill the form</button>
+          <button type="button" class="addrow" style="margin:0" onclick="doExport()">Export current state</button>
+          <button type="button" class="addrow" style="margin:0" onclick="clearImport()">Clear form</button>
+        </div>
+        <div id="importMsg" style="margin-top:10px;font-size:13px"></div>
+      </div>
+    </div>
+
     <!-- SETUP -->
     <div class="card">
       <div class="hd"><span class="n">START</span><h2>Vendor &amp; key dates</h2></div>
@@ -952,7 +983,115 @@ function copyDlg(b){ navigator.clipboard.writeText($('dlgB').textContent);
   const t=b.textContent;b.textContent='Copied';setTimeout(()=>b.textContent=t,1100); }
 function copyTsv(){ navigator.clipboard.writeText(buildText()); }
 
+/* ---------- import / export ---------- */
+const TEXT_FIELDS = ['vendor','countDue','start','end','jobEnd','progName','job','ccy','status',
+  'owner','csm','geo','tgtType','talGeo','exclTrumps','talNotes','otherFirmo','exclNotes',
+  'personaMode','seniority','titles','falsePos','falsePos2','falsePos3','personaOther','dataNotes',
+  'journey','kpi','cplApproved','volNotes','desc','orderStatus','reporting','split','pacing',
+  'genInstr','assets','script'];
+const CHECK_FIELDS = ['talCampaign','talUploaded','wsCampaign','exclProvided','dedupe','exclIT','assetsUp'];
+
+function treeToObj(el,DATA){
+  const o={};
+  DATA.forEach((ind,i)=>{
+    if(!ind.subs){ if(el.querySelector(`input[data-par="${i}"]`).checked) o[ind.n]=true; return; }
+    const on=ind.subs.filter((_,j)=>el.querySelector(`input[data-p="${i}"][data-s="${j}"]`).checked);
+    if(on.length) o[ind.n] = on.length===ind.subs.length ? true : on;
+  });
+  return o;
+}
+function objToTree(el,DATA,obj){
+  el.querySelectorAll('input[type=checkbox]').forEach(c=>{c.checked=false;c.indeterminate=false;});
+  if(!obj) return;
+  Object.entries(obj).forEach(([name,val])=>{
+    const i=DATA.findIndex(d=>d.n===name); if(i<0) return;
+    const ind=DATA[i];
+    if(!ind.subs || val===true){
+      const par=el.querySelector(`input[data-par="${i}"]`); if(par) par.checked=true;
+      if(ind.subs) el.querySelectorAll(`input[data-p="${i}"]`).forEach(c=>c.checked=true);
+      return;
+    }
+    (Array.isArray(val)?val:[val]).forEach(sub=>{
+      const j=ind.subs.indexOf(sub); if(j<0) return;
+      const c=el.querySelector(`input[data-p="${i}"][data-s="${j}"]`); if(c) c.checked=true;
+    });
+    const kids=[...el.querySelectorAll(`input[data-p="${i}"]`)];
+    const on=kids.filter(c=>c.checked).length;
+    const par=el.querySelector(`input[data-par="${i}"]`);
+    par.checked = on===kids.length; par.indeterminate = on>0 && on<kids.length;
+    if(on) el.querySelectorAll('.par')[i].querySelector('.kids')?.classList.remove('hide');
+  });
+}
+function buildPayload(){
+  const p={v:1};
+  TEXT_FIELDS.forEach(f=>{ const val=v(f); if(val) p[f]=val; });
+  CHECK_FIELDS.forEach(f=>{ if(ck(f)) p[f]=true; });
+  const ind=treeToObj(tree,INDUSTRIES); if(Object.keys(ind).length) p.industries=ind;
+  const fn=treeToObj(ftree,FUNCTIONS);  if(Object.keys(fn).length)  p.functions=fn;
+  const sz=sizes(); if(sz.length) p.sizes=sz;
+  const sen={}; Object.entries(SEN_STATE).forEach(([k,s])=>{ if(s&&s.size) sen[k]=[...s]; });
+  if(Object.keys(sen).length) p.seniorityByFunction=sen;
+  const oc=OUTCOMES.filter(o=>o.type||o.vol||o.cpl);
+  if(oc.length) p.outcomes=oc.map(o=>({type:o.type,crit:o.crit,vol:o.vol,max:o.max,cpl:o.cpl}));
+  return p;
+}
+function applyPayload(p){
+  TEXT_FIELDS.forEach(f=>{ const el=$(f); if(el) el.value = p[f]!==undefined ? p[f] : ''; });
+  CHECK_FIELDS.forEach(f=>{ const el=$(f); if(el) el.checked = !!p[f]; });
+  document.querySelectorAll('.sz').forEach(c=>c.checked=(p.sizes||[]).includes(c.value));
+  objToTree(tree,INDUSTRIES,p.industries);
+  objToTree(ftree,FUNCTIONS,p.functions);
+  Object.keys(SEN_STATE).forEach(k=>delete SEN_STATE[k]);
+  Object.entries(p.seniorityByFunction||{}).forEach(([k,arr])=>SEN_STATE[k]=new Set(arr));
+  OUTCOMES = (p.outcomes&&p.outcomes.length)
+    ? p.outcomes.map(o=>({type:o.type||'',crit:o.crit||'',vol:o.vol??'',max:o.max??'',cpl:o.cpl??''}))
+    : [{type:'',crit:'',vol:'',max:'',cpl:''}];
+  paintOutcomes();
+  render();
+  markInferred(p.inferred||[]);
+}
+function markInferred(keys){
+  document.querySelectorAll('.fld.inf').forEach(e=>e.classList.remove('inf'));
+  const map={industries:'tree',functions:'ftree',sizes:'sizeGrid',
+             seniorityByFunction:'senMatrix',outcomes:'outTable'};
+  keys.forEach(k=>{
+    const el=$(map[k]||k); if(!el) return;
+    const f=el.closest('.fld'); if(f) f.classList.add('inf');
+  });
+  const n=document.querySelectorAll('.fld.inf').length;
+  $('importMsg').innerHTML = n
+    ? `<span class="ok-msg">Form filled.</span> <b>${n}</b> field${n>1?'s were':' was'} inferred rather than stated — they're marked amber below. Check them before keying in.`
+    : `<span class="ok-msg">Form filled.</span> Every value came straight from the source documents.`;
+}
+function doImport(){
+  const raw=v('importBox');
+  if(!raw){ $('importMsg').innerHTML='<span class="err-msg">Nothing to import — paste the prefill code first.</span>'; return; }
+  let p;
+  try{
+    const m=raw.match(/\{[\s\S]*\}/);        // tolerate ```json fences and surrounding prose
+    p=JSON.parse(m?m[0]:raw);
+  }catch(e){
+    $('importMsg').innerHTML='<span class="err-msg">Could not read that — it should be the JSON block Claude gave you.</span>'; return;
+  }
+  applyPayload(p);
+  if(p.notes) $('importMsg').innerHTML += `<div style="margin-top:8px;color:var(--ink2)">${p.notes}</div>`;
+  document.querySelector('main .card:nth-child(2)').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function doExport(){
+  const t=JSON.stringify(buildPayload(),null,2);
+  $('importBox').value=t;
+  navigator.clipboard.writeText(t).then(()=>{
+    $('importMsg').innerHTML='<span class="ok-msg">Exported and copied.</span> Keep this code to resume later or hand to a colleague.';
+  },()=>{ $('importMsg').innerHTML='<span class="ok-msg">Exported below.</span> Copy it to resume later.'; });
+}
+function clearImport(){
+  if(!confirm('Clear every field and start again?')) return;
+  applyPayload({}); $('importBox').value='';
+  $('importMsg').innerHTML='<span style="color:var(--ink3)">Form cleared.</span>';
+}
+
 document.querySelectorAll('input,select,textarea').forEach(el=>{
+  if(el.id==='importBox') return;
   el.addEventListener('input',render); el.addEventListener('change',render);
 });
 render();
