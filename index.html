@@ -97,6 +97,27 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--teal);bo
 .clash b{display:block;margin-bottom:3px;color:#4d3500}
 .allgood{text-align:center;padding:22px 10px;color:var(--ok);font-size:13.5px;font-weight:600}
 
+/* persona matrix */
+.mt-empty{font-size:13px;color:var(--ink3);padding:16px;border:1px dashed var(--line);
+  border-radius:9px;text-align:center;background:#fcfdfe}
+.mt-bulk{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:9px;
+  font-size:12px;color:var(--ink3);font-weight:650}
+.mt-bulk button{border:1px solid var(--line);background:#fff;border-radius:6px;padding:3px 9px;
+  font-size:11.5px;font-weight:600;color:var(--ink2)}
+.mt-bulk button:hover{border-color:var(--teal);color:var(--teal)}
+.mt{border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#fff}
+.mt-r{display:grid;grid-template-columns:minmax(180px,1.6fr) repeat(5,minmax(58px,1fr));
+  align-items:center;border-top:1px solid var(--line2)}
+.mt-r:first-child{border-top:none}
+.mt-h{background:#fbfcfd;position:sticky;top:0}
+.mt-h .mt-c{font-size:10.5px;font-weight:700;letter-spacing:.02em;color:var(--ink3);
+  line-height:1.25;padding:8px 4px;text-align:center;hyphens:auto}
+.mt-f{padding:9px 12px;font-size:12.5px;font-weight:600;line-height:1.35}
+.mt-c{text-align:center;padding:7px 4px}
+.mt-c input{accent-color:var(--teal);width:16px;height:16px}
+.mt-warn{background:#fdf6f5}
+.mt-warn .mt-f{color:var(--g1)}
+.mt-warn .mt-f::after{content:" — no seniority set";font-weight:500;font-size:11.5px;opacity:.85}
 button{font-family:inherit;cursor:pointer}
 .btn{width:100%;padding:10px;border-radius:9px;border:1px solid var(--teal);background:var(--teal);
   color:#fff;font-size:14px;font-weight:650;margin-bottom:8px}
@@ -127,6 +148,43 @@ dialog .df button.pri{background:var(--teal);border-color:var(--teal);color:#fff
   </div>
 
   <main>
+    <!-- SETUP -->
+    <div class="card">
+      <div class="hd"><span class="n">START</span><h2>Vendor &amp; key dates</h2></div>
+      <div class="bd">
+        <div class="fld full"><label>Vendor — who is the campaign for?<span class="req">*</span>
+          <span class="hint">Pick from the list or type a new one.</span></label>
+          <input type="text" id="vendor" list="vendorList" placeholder="Start typing…" autocomplete="off">
+          <datalist id="vendorList">
+            <option>Adobe</option><option>APC Schneider</option><option>ASUS</option>
+            <option>Cisco</option><option>Datadog</option><option>Fujitsu</option>
+            <option>HP</option><option>HPE</option><option>IBM</option><option>Intel</option>
+            <option>Lenovo</option><option>Microsoft</option><option>NetApp</option>
+            <option>Nutanix</option><option>Oracle</option><option>Salesforce</option>
+            <option>SAP</option><option>Schneider Electric</option><option>ServiceNow</option>
+            <option>VMware</option>
+          </datalist></div>
+
+        <div class="cond" style="border-left-color:var(--g1)">
+          <div class="ct" style="color:var(--g1)">Count request</div>
+          <div class="fld"><label>Count due back from the data team<span class="req">*</span>
+            <span class="hint">When you need the count returned — not the campaign date. Everything downstream keys off this.</span></label>
+            <input type="date" id="countDue" onchange="render()"></div>
+        </div>
+
+        <div class="row">
+          <div class="fld"><label>Campaign start date<span class="req">*</span></label>
+            <input type="date" id="start" onchange="render()"></div>
+          <div class="fld"><label>Campaign end date<span class="req">*</span></label>
+            <input type="date" id="end" onchange="render()"></div>
+          <div class="fld full"><label>Job end date
+            <span class="hint">Campaign must finish within it.</span></label>
+            <input type="date" id="jobEnd" onchange="render()"></div>
+        </div>
+        <div id="runtime" style="font-size:13px;color:var(--ink3);margin-top:-4px"></div>
+      </div>
+    </div>
+
     <!-- TAB 1 -->
     <div class="card">
       <div class="hd"><span class="n">TAB 1</span><h2>Program information</h2></div>
@@ -137,8 +195,6 @@ dialog .df button.pri{background:var(--teal);border-color:var(--teal);color:#fff
             <input type="text" id="progName" placeholder="Fujitsu FY25Q2 – Cyber with Skyhigh – Content Syndication &amp; Display"></div>
           <div class="fld"><label>Job (parent record)<span class="req">*</span></label>
             <input type="text" id="job" placeholder="Parent Job name"></div>
-          <div class="fld"><label>Vendor / end client<span class="req">*</span></label>
-            <input type="text" id="vendor" placeholder="Fujitsu"></div>
           <div class="fld"><label>Currency</label>
             <select id="ccy"><option>AUD</option><option>NZD</option><option>SGD</option><option>USD</option><option>EUR</option><option>GBP</option></select></div>
           <div class="fld"><label>Program status</label>
@@ -156,20 +212,18 @@ dialog .df button.pri{background:var(--teal);border-color:var(--teal);color:#fff
     <div class="card">
       <div class="hd"><span class="n">TAB 2</span><h2>Audience size — the count request</h2></div>
       <div class="bd">
-        <div class="row">
-          <div class="fld"><label>Count due date<span class="req">*</span></label><input type="date" id="countDue"></div>
-          <div class="fld"><label>Target geographies<span class="req">*</span></label>
-            <input type="text" id="geo" placeholder="AU only"></div>
-        </div>
+        <div class="fld full"><label>Target geographies<span class="req">*</span></label>
+          <input type="text" id="geo" placeholder="AU only"></div>
 
         <div class="fld full"><label>Campaign targeting type<span class="req">*</span>
-          <span class="hint">The highest-leverage field on the record — it changes what's required below, what the count returns, and how many campaigns get built.</span></label>
+          <span class="hint">The highest-leverage field on the record — it decides whether firmographics are needed at all, what the count returns, and how many campaigns get built.</span></label>
           <select id="tgtType" onchange="render()">
             <option value="">— select —</option>
             <option>Targeted Account List (TAL)</option>
             <option>TAL + Whitespace</option>
             <option>Whitespace Only</option>
-          </select></div>
+          </select>
+          <div id="tgtNote" style="font-size:12.5px;line-height:1.5;margin-top:6px"></div></div>
 
         <!-- TAL conditional -->
         <div class="cond hide" id="talBlock">
@@ -196,17 +250,24 @@ dialog .df button.pri{background:var(--teal);border-color:var(--teal);color:#fff
           <label class="chk"><input type="checkbox" id="wsCampaign" onchange="render()"><span>Whitespace Campaign</span></label>
         </div>
 
-        <div class="fld full"><label>Industries<span class="req">*</span>
-          <span class="hint">Select at sub-industry level. Be precise — over-selecting inflates the count and produces leads the client rejects.</span></label>
-          <div class="tree" id="tree"></div></div>
+        <div id="firmoBlock">
+          <div class="fld full"><label>Industries<span class="req">*</span>
+            <span class="hint">Select at sub-industry level. Be precise — over-selecting inflates the count and produces leads the client rejects.</span></label>
+            <div class="tree" id="tree"></div></div>
 
-        <div class="fld full"><label>Target employee size range<span class="req">*</span>
-          <span class="hint">No SMB band exists — the picker starts at 201.</span></label>
-          <div class="chkgrid" id="sizeGrid"></div></div>
+          <div class="fld full"><label>Target employee size range<span class="req">*</span>
+            <span class="hint">No SMB band exists — the picker starts at 201.</span></label>
+            <div class="chkgrid" id="sizeGrid"></div></div>
 
-        <div class="fld full"><label>Other firmographic parameters
-          <span class="hint">Park anything that doesn't map cleanly to a sub-industry here.</span></label>
-          <textarea id="otherFirmo"></textarea></div>
+          <div class="fld full"><label>Other firmographic parameters
+            <span class="hint">Park anything that doesn't map cleanly to a sub-industry here.</span></label>
+            <textarea id="otherFirmo"></textarea></div>
+        </div>
+        <div id="firmoSkip" class="clash hide" style="margin:0 0 16px">
+          <b>Firmographics not required</b>
+          On TAL/ABM only, the account list <i>is</i> the audience — industries and company sizes don't filter anything.
+          Switch to TAL + Whitespace if you need them.
+        </div>
 
         <div class="fld full"><label>Exclusions &amp; dedupe</label>
           <label class="chk"><input type="checkbox" id="exclProvided" onchange="render()"><span>Exclusion list provided</span></label>
@@ -244,12 +305,14 @@ dialog .df button.pri{background:var(--teal);border-color:var(--teal);color:#fff
 
         <div class="cond hide" id="pFunc">
           <div class="ct">Function + seniority</div>
-          <div class="fld"><label>Functions<span class="req">*</span>
+          <div class="fld"><label>Step 1 — pick the functions<span class="req">*</span>
             <span class="hint">13 parents, 22 sub-functions. Eight parents have no children — tick those directly.</span></label>
             <div class="tree" id="ftree"></div></div>
-          <div class="fld"><label>Seniority levels<span class="req">*</span>
-            <span class="hint">Multi-select, not a floor. Business Partner/Advisor sits outside the hierarchy.</span></label>
-            <div class="chkgrid" id="senGrid"></div></div>
+
+          <div class="fld"><label>Step 2 — set seniority for each one<span class="req">*</span>
+            <span class="hint">Seniority is set per function. IT can be Manager and above while Finance is Director and above in the same campaign.</span></label>
+            <div id="senMatrix"></div></div>
+
           <div class="fld"><label>False positives to exclude<span class="req">*</span>
             <span class="hint">Titles that match the function but are the wrong person.</span></label>
             <textarea id="falsePos3" oninput="render()"></textarea></div>
@@ -463,13 +526,56 @@ const tree = document.getElementById('tree');
 const ftree = document.getElementById('ftree');
 buildTree(tree, INDUSTRIES);
 buildTree(ftree, FUNCTIONS);
-const seng=document.getElementById('senGrid');
-SENIORITY.forEach(s=>{
-  const l=document.createElement('label'); l.className='chk';
-  l.innerHTML=`<input type="checkbox" class="sen" value="${s}"><span>${s}</span>`;
-  seng.appendChild(l);
+/* per-function seniority matrix — state survives re-render */
+const SEN_STATE = {};           // { "IT & Technology › Cloud Engineering": Set(levels) }
+const senMatrix = document.getElementById('senMatrix');
+function fnKey(x){ return x.s.length && x.s[0]!=='(all)' ? x.p+' › '+x.s.join(' + ') : x.p; }
+function fnRows(){
+  const rows=[];
+  selectedFunctions().forEach(x=>{
+    if(!x.s.length || x.s[0]==='(all)') rows.push({label:x.p, key:x.p});
+    else x.s.forEach(sub=>rows.push({label:x.p+' › '+sub, key:x.p+'|'+sub}));
+  });
+  return rows;
+}
+function paintMatrix(){
+  const rows=fnRows();
+  if(!rows.length){
+    senMatrix.innerHTML='<div class="mt-empty">Tick a function above and it appears here with its own seniority levels.</div>';
+    return;
+  }
+  const bulk = `<div class="mt-bulk">Apply to all:
+    ${SENIORITY.map(s=>`<button type="button" onclick="bulkSen('${s.replace(/'/g,"\\'")}')">${s}</button>`).join('')}
+    <button type="button" onclick="bulkSen(null)">clear</button></div>`;
+  const head = `<div class="mt-r mt-h"><div class="mt-f"></div>${
+    SENIORITY.map(s=>`<div class="mt-c">${s.replace('/','/<wbr>')}</div>`).join('')}</div>`;
+  const body = rows.map(r=>{
+    const set=SEN_STATE[r.key]||new Set();
+    const cells=SENIORITY.map(s=>
+      `<div class="mt-c"><input type="checkbox" data-fk="${r.key}" value="${s}" ${set.has(s)?'checked':''}></div>`).join('');
+    const warn = set.size===0 ? ' mt-warn' : '';
+    return `<div class="mt-r${warn}"><div class="mt-f">${r.label}</div>${cells}</div>`;
+  }).join('');
+  senMatrix.innerHTML = bulk + `<div class="mt">${head}${body}</div>`;
+}
+senMatrix.addEventListener('change',e=>{
+  const t=e.target; if(!t.dataset.fk) return;
+  const k=t.dataset.fk;
+  SEN_STATE[k]=SEN_STATE[k]||new Set();
+  t.checked ? SEN_STATE[k].add(t.value) : SEN_STATE[k].delete(t.value);
+  render();
 });
-seng.addEventListener('change',render);
+function bulkSen(level){
+  fnRows().forEach(r=>{
+    if(level===null){ SEN_STATE[r.key]=new Set(); }
+    else { SEN_STATE[r.key]=SEN_STATE[r.key]||new Set(); SEN_STATE[r.key].add(level); }
+  });
+  render();
+}
+function personaPairs(){
+  return fnRows().map(r=>({fn:r.label, levels:[...(SEN_STATE[r.key]||new Set())]
+    .sort((a,b)=>SENIORITY.indexOf(a)-SENIORITY.indexOf(b))}));
+}
 const sg=document.getElementById('sizeGrid');
 SIZES.forEach(s=>{
   const l=document.createElement('label'); l.className='chk';
@@ -486,7 +592,6 @@ const selectedIndustries = ()=>selectedFrom(tree, INDUSTRIES);
 const selectedFunctions  = ()=>selectedFrom(ftree, FUNCTIONS);
 const fmt = a => a.map(x=>x.s.length? x.p+': '+x.s.join(', ') : x.p).join(' | ');
 function sizes(){return [...document.querySelectorAll('.sz')].filter(c=>c.checked).map(c=>c.value);}
-function seniorities(){return [...document.querySelectorAll('.sen')].filter(c=>c.checked).map(c=>c.value);}
 function weeksBetween(a,b){
   if(!a||!b) return 0;
   return Math.max(0,Math.round((new Date(b)-new Date(a))/6048e5));
@@ -498,9 +603,23 @@ function render(){
   const isTAL = tt==='Targeted Account List (TAL)' || tt==='TAL + Whitespace';
   const isWS  = tt==='Whitespace Only' || tt==='TAL + Whitespace';
   const isBoth= tt==='TAL + Whitespace';
+  const talOnly = tt==='Targeted Account List (TAL)';
+  const needFirmo = isWS;                    // firmographics only bite when whitespace is involved
   $('talBlock').classList.toggle('hide',!isTAL);
   $('wsBlock').classList.toggle('hide',!isWS);
+  $('firmoBlock').classList.toggle('hide', !!talOnly);
+  $('firmoSkip').classList.toggle('hide', !talOnly);
   $('splitReq').style.display = isBoth?'inline':'none';
+  $('tgtNote').innerHTML = !tt ? '' :
+    talOnly ? '<span style="color:var(--g3)">Only the client\'s named accounts are targeted. Industries and company sizes are not needed.</span>'
+    : isBoth ? '<span style="color:var(--teal)">Two audiences, two campaigns per channel. Industries and company sizes required — they define the whitespace side.</span>'
+    : '<span style="color:var(--teal)">Industries and company sizes required — on whitespace they <i>are</i> the selection criteria.</span>';
+
+  // campaign runtime readout
+  const wk=weeksBetween(v('start'),v('end'));
+  $('runtime').textContent = wk>0 ? `Campaign runs ~${wk} weeks.` +
+    (v('countDue')? ` Count due ${new Date(v('countDue')).toLocaleDateString('en-AU')}, `+
+      `${Math.max(0,Math.round((new Date(v('start'))-new Date(v('countDue')))/864e5))} days before launch.` : '') : '';
   const isEx = pm==='Example title list OR general description of audience groups';
   const isFS = pm==='Function + Seniority';
   const otherModes = pm && !isEx && !isFS;
@@ -514,6 +633,7 @@ function render(){
   }
   paintCounts(tree, INDUSTRIES);
   paintCounts(ftree, FUNCTIONS);
+  if(isFS) paintMatrix();
 
   /* gaps */
   const G=[];
@@ -527,16 +647,20 @@ function render(){
   need(!tt,'G1','Campaign targeting type','Drives every other requirement — data team cannot start without it');
   need(!v('geo'),'G1','Target geographies','Count cannot be scoped');
   need(!v('countDue'),'G1','Count due date','No deadline set with the data team');
-  need(selectedIndustries().length===0,'G1','Industry selection','Data team has no vertical filter');
-  need(sizes().length===0,'G1','Employee size range','Data team has no firmographic filter');
+  need(!v('vendor'),'G1','Vendor','Who the campaign is for');
+  need(needFirmo && selectedIndustries().length===0,'G1','Industry selection','On whitespace the industry picker is the selection criteria — with none ticked there is no audience');
+  need(needFirmo && sizes().length===0,'G1','Employee size range','Data team has no firmographic filter');
   need(!pm,'G1','Type of title targeting','Persona mode drives what the data team builds');
   if(pm==='Example title list OR general description of audience groups'){
     need(!v('seniority'),'G1','Seniority floor','Manager+ vs Director+ changes reachable volume materially');
     need(!v('titles'),'G1','Example titles','No basis to build the Boolean');
     need(!v('falsePos'),'G1','False-positive exclusions','Without these the count returns the wrong people — this is where lead quality lives');
   } else if(isFS){
-    need(selectedFunctions().length===0,'G1','Function selection','No functions ticked — data team has no persona filter');
-    need(seniorities().length===0,'G1','Seniority levels','No levels ticked');
+    const pairs=personaPairs();
+    need(pairs.length===0,'G1','Function selection','No functions ticked — data team has no persona filter');
+    const noSen=pairs.filter(p=>!p.levels.length);
+    need(noSen.length>0,'G1','Seniority not set',
+      noSen.length? `No levels set for: ${noSen.map(p=>p.fn).join(', ')}`:'');
     need(!v('falsePos3'),'G1','False-positive exclusions','Where lead quality lives');
   } else if(otherModes){
     need(!v('personaOther'),'G1','Audience detail','Persona mode selected but nothing supplied');
@@ -574,19 +698,31 @@ function render(){
     const rate=(n/w).toFixed(1);
     if(!v('pacing')) C.push(['Pacing unstated',`Set a pacing schedule — ${n} leads across ~${w} weeks means <b>${rate}/week</b>, and without a rule it front-loads or scrambles at the end.`]);
   }
-  const sen=seniorities();
-  if(isFS && sen.length===1 && sen[0]==='Executive/C-Level' && n>=40)
-    C.push(['C-level only at volume',`Only <b>Executive/C-Level</b> ticked against a ${n}-lead target. C-suite alone rarely carries volume — consider adding Director/Head, or expect to switch to Whitespace.`]);
-  if(isFS && sen.includes('Practitioner/Specialist') && /bant/i.test(v('lt1')+v('lt2')))
-    C.push(['Practitioners on a BANT product','<b>Practitioner/Specialist</b> is ticked on a BANT lead type. Practitioners rarely hold budget or authority, so expect rejections on the A and B criteria.']);
+  const pairsAll = isFS? personaPairs() : [];
+  const senAll = [...new Set(pairsAll.flatMap(p=>p.levels))];
+  const setPairs = pairsAll.filter(p=>p.levels.length);
+  if(setPairs.length && setPairs.every(p=>p.levels.length===1 && p.levels[0]==='Executive/C-Level') && n>=40)
+    C.push(['C-level only at volume',`Every function is set to <b>Executive/C-Level</b> alone against a ${n}-lead target. C-suite rarely carries volume — consider adding Director/Head, or expect to lean on Whitespace.`]);
+  if(senAll.includes('Practitioner/Specialist') && /bant/i.test(v('lt1')+v('lt2')))
+    C.push(['Practitioners on a BANT product',`<b>Practitioner/Specialist</b> is set on ${setPairs.filter(p=>p.levels.includes('Practitioner/Specialist')).map(p=>p.fn).join(', ')}. Practitioners rarely hold budget or authority — expect rejections on the A and B criteria.`]);
+  if(setPairs.length>1 && new Set(setPairs.map(p=>p.levels.join('|'))).size===1 && setPairs.length>=3)
+    C.push(['Same seniority across every function',`All ${setPairs.length} functions carry identical seniority. That is fine if deliberate — but Finance and Legal usually need a higher floor than IT to be the right buyer.`]);
   const ind0=selectedIndustries();
-  if(ind0.some(x=>x.p==='Technology & IT' && (x.s[0]==='(all)'||x.s.includes('Cybersecurity'))) &&
+  if(needFirmo && ind0.some(x=>x.p==='Technology & IT' && (x.s[0]==='(all)'||x.s.includes('Cybersecurity'))) &&
      /cyber|security/i.test(v('progName')))
     C.push(['Cybersecurity as industry vs audience','You have selected the <b>Cybersecurity</b> sub-industry on a security-themed program. That targets security <i>vendors</i>. If you want security buyers inside other verticals, this belongs in the persona, not the industry.']);
   const totalSubs = selectedIndustries().reduce((a,x)=>a+x.n,0);
-  if(totalSubs>=25) C.push(['Broad industry selection',`${totalSubs} sub-industries selected across ${selectedIndustries().length} verticals. Worth confirming the client wants this breadth — wide nets inflate the count and produce leads they later reject.`]);
-  if(sizes().length && !sizes().includes('201-500') && !sizes().includes('501-1,000') && n>=100)
+  if(needFirmo && totalSubs>=25) C.push(['Broad industry selection',`${totalSubs} sub-industries selected across ${ind0.length} verticals. Worth confirming the client wants this breadth — wide nets inflate the count and produce leads they later reject.`]);
+  if(needFirmo && sizes().length && !sizes().includes('201-500') && !sizes().includes('501-1,000') && n>=100)
     C.push(['Enterprise-only at volume','Enterprise-only bands with a high lead target — check the matched universe supports it.']);
+  if(talOnly && (totalSubs>0 || sizes().length))
+    C.push(['Firmographics set on a TAL-only campaign','Industries or company sizes are ticked but targeting is TAL/ABM only, so they filter nothing. Either clear them or switch to TAL + Whitespace.']);
+  const lead = v('countDue') && v('start')
+    ? Math.round((new Date(v('start'))-new Date(v('countDue')))/864e5) : null;
+  if(lead!==null && lead<0)
+    C.push(['Count due after launch',`The count is due ${Math.abs(lead)} days <b>after</b> the campaign starts. Bring the count date forward.`]);
+  else if(lead!==null && lead<10)
+    C.push(['Tight count-to-launch window',`Only ${lead} days between the count landing and launch. Pricing, approval, IO and build all sit in that gap.`]);
 
   /* paint */
   const gl=$('gapList');
@@ -619,12 +755,18 @@ function buildText(){
   add('Currency',v('ccy')); add('Program Status',v('status'));
   add('Salesperson',v('owner')); add('Customer Success Manager',v('csm'));
   L.push(''); L.push('== TAB 2 · AUDIENCE SIZE ==');
-  add('Due Date',v('countDue')); add('Campaign Targeting Type',v('tgtType'));
+  add('Due Date (count back from data team)',v('countDue'));
+  add('Campaign Targeting Type',v('tgtType'));
   add('Target Geographies',v('geo'));
-  add('Industries', fmt(selectedIndustries()));
-  add('Target Employee Size Range', sizes().join(';'));
-  add('Other Firmographic Parameters',v('otherFirmo'));
   const tt=v('tgtType');
+  if(tt==='Targeted Account List (TAL)'){
+    L.push('Industries\t[n/a — TAL/ABM only, the account list is the audience]');
+    L.push('Target Employee Size Range\t[n/a — TAL/ABM only]');
+  } else {
+    add('Industries', fmt(selectedIndustries()));
+    add('Target Employee Size Range', sizes().join(';'));
+    add('Other Firmographic Parameters',v('otherFirmo'));
+  }
   if(tt.includes('TAL')){
     add('TAL Campaign',ck('talCampaign')?'Yes':'No');
     add('TAL Uploaded',ck('talUploaded')?'Yes':'No');
@@ -639,8 +781,11 @@ function buildText(){
   add('Exclude IT Vendors and MSPs',ck('exclIT')?'Yes':'No');
   add('Type of Title Targeting',v('personaMode'));
   if(v('personaMode')==='Function + Seniority'){
-    add('Functions', fmt(selectedFunctions()));
-    add('Seniority levels', seniorities().join('; '));
+    const pairs=personaPairs();
+    if(pairs.length){
+      L.push('Persona matrix (function → seniority)');
+      pairs.forEach(p=>L.push('  · '+p.fn+'\t'+(p.levels.length?p.levels.join(', '):'[SENIORITY NOT SET]')));
+    } else L.push('Persona matrix\t[MISSING]');
   } else {
     const titles=v('titles')||v('personaOther');
     add('Explanation of Audience & Example Titles', (v('seniority')? v('seniority')+'\n\n':'')+titles);
@@ -658,7 +803,9 @@ function buildText(){
   add('Approved CPL with Notes',v('cplApproved')); add('Max Volume Notes',v('volNotes'));
   add('Description of Program',v('desc'));
   L.push(''); L.push('== TAB 4 · CAMPAIGN SETUP ==');
-  add('Campaign Name',v('progName')); add('Start Date',v('start')); add('End Date',v('end'));
+  add('Campaign Name',v('progName'));
+  add('Start Date',v('start')); add('End Date',v('end'));
+  const wkq=weeksBetween(v('start'),v('end')); if(wkq) L.push('Campaign runtime\t~'+wkq+' weeks');
   add('Campaign Order Status',v('orderStatus')); add('Reporting Day & Process',v('reporting'));
   add('Lead Split at Campaign Level',v('split')); add('Lead Pacing Schedule',v('pacing'));
   add('General Instructions',v('genInstr'));
