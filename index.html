@@ -97,6 +97,27 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--teal);bo
 .clash b{display:block;margin-bottom:3px;color:#4d3500}
 .allgood{text-align:center;padding:22px 10px;color:var(--ok);font-size:13.5px;font-weight:600}
 
+/* outcomes table */
+.ot{border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#fff}
+.ot-r{display:grid;grid-template-columns:1.5fr 1.6fr .7fr .7fr .8fr .95fr 34px;
+  gap:6px;align-items:center;padding:6px 8px;border-top:1px solid var(--line2)}
+.ot-r:first-child{border-top:none}
+.ot-h{background:#fbfcfd;font-size:10.5px;font-weight:700;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--ink3);padding:8px}
+.ot-f{background:#fbfcfd;font-size:12px;font-weight:650;color:var(--ink2);padding:9px 8px}
+.ot-r input,.ot-r select{padding:6px 8px;font-size:13px;border-radius:6px}
+.ot-t{text-align:right;font-variant-numeric:tabular-nums;font-weight:600;font-size:13px;padding-right:4px}
+.ot-f .ot-t{font-size:14px;color:var(--teal)}
+.ot-f #ot-leads{font-variant-numeric:tabular-nums;font-weight:700;text-align:center}
+.ot-x{border:1px solid var(--line);background:#fff;border-radius:6px;width:26px;height:26px;
+  color:var(--ink3);font-size:15px;line-height:1}
+.ot-x:hover{border-color:var(--g1);color:var(--g1);background:#fdecea}
+.addrow{margin-top:8px;border:1px dashed var(--line);background:#fff;border-radius:8px;
+  padding:8px 14px;font-size:13px;font-weight:600;color:var(--ink2)}
+.addrow:hover{border-color:var(--teal);color:var(--teal);border-style:solid}
+@media(max-width:760px){.ot-r{grid-template-columns:1fr 1fr;gap:5px}.ot-h{display:none}
+  .ot-t{text-align:left}}
+
 /* persona matrix */
 .mt-empty{font-size:13px;color:var(--ink3);padding:16px;border:1px dashed var(--line);
   border-radius:9px;text-align:center;background:#fcfdfe}
@@ -334,17 +355,13 @@ dialog .df button.pri{background:var(--teal);border-color:var(--teal);color:#fff
     <div class="card">
       <div class="hd"><span class="n">TAB 3</span><h2>Max avails &amp; pricing</h2></div>
       <div class="bd">
+        <div class="fld full"><label>Outcomes<span class="req">*</span>
+          <span class="hint">One row per lead line — this mirrors the Outcomes related list, which takes any number of rows.</span></label>
+          <div id="outTable"></div>
+          <button type="button" class="addrow" onclick="addOutcome()">+ Add outcome</button>
+        </div>
+
         <div class="row">
-          <div class="fld"><label>Lead type 1<span class="req">*</span></label>
-            <input type="text" id="lt1" placeholder="CS + Profiled" oninput="render()"></div>
-          <div class="fld"><label>Lead type 1 — criteria</label><input type="text" id="lt1crit" placeholder="Profiled CS"></div>
-          <div class="fld"><label>Lead volume<span class="req">*</span></label>
-            <input type="number" id="vol" placeholder="48" oninput="render()"></div>
-          <div class="fld"><label>Max results per account</label><input type="number" id="lt1max" placeholder="2"></div>
-          <div class="fld"><label>CPL requested<span class="req">*</span></label>
-            <input type="number" id="cpl" placeholder="105" oninput="render()"></div>
-          <div class="fld"><label>Lead type 2 <span class="hint">Only if a second type is sold</span></label>
-            <input type="text" id="lt2"></div>
           <div class="fld"><label>Lead journey after reporting<span class="req">*</span></label>
             <input type="text" id="journey" placeholder="LDR Follow Up" oninput="render()"></div>
           <div class="fld"><label>What does success look like? (KPIs)<span class="req">*</span></label>
@@ -466,6 +483,8 @@ const FUNCTIONS = [
 const SENIORITY = ["Practitioner/Specialist","Manager/Lead","Director/Head","Executive/C-Level","Business Partner/Advisor"];
 const SIZES = ["1-10","11-50","51-200","201-500","501-1,000","1,001-5,000","5,001-10,000","10,001+"];
 const SMB_BANDS = ["1-10","11-50","51-200"];
+const LEAD_TYPES = ["Opt-In","CS","CS + Profiled","Event Registration","HQL","MQL","Other (provide details in notes)"];
+const QUALIFIED = ["HQL","MQL"];   // types where budget/authority actually gets tested
 
 /* ---------- build pickers ---------- */
 function buildTree(el, DATA){
@@ -528,6 +547,65 @@ const tree = document.getElementById('tree');
 const ftree = document.getElementById('ftree');
 buildTree(tree, INDUSTRIES);
 buildTree(ftree, FUNCTIONS);
+/* ---------- outcomes (repeatable lead lines) ---------- */
+let OUTCOMES = [{type:'',crit:'',vol:'',max:'',cpl:''}];
+const outTable = document.getElementById('outTable');
+const num = x => { const f=parseFloat(x); return isFinite(f)?f:0; };
+const lineTotal = o => num(o.vol)*num(o.cpl);
+const totalLeads = () => OUTCOMES.reduce((a,o)=>a+num(o.vol),0);
+const totalValue = () => OUTCOMES.reduce((a,o)=>a+lineTotal(o),0);
+const money = n => n.toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+function paintOutcomes(){
+  const head=`<div class="ot-r ot-h">
+    <div>Lead type</div><div>Criteria</div><div>Volume</div><div>Max/acct</div><div>CPL</div>
+    <div class="ot-t">Line total</div><div></div></div>`;
+  const rows=OUTCOMES.map((o,i)=>`
+    <div class="ot-r">
+      <div><select data-oi="${i}" data-of="type">
+        <option value="">— select —</option>
+        ${LEAD_TYPES.map(t=>`<option${o.type===t?' selected':''}>${t}</option>`).join('')}
+      </select></div>
+      <div><input type="text" data-oi="${i}" data-of="crit" value="${(o.crit||'').replace(/"/g,'&quot;')}"
+           placeholder="${o.type==='Other (provide details in notes)'?'Required — describe the type':'e.g. Profiled CS'}"></div>
+      <div><input type="number" min="0" data-oi="${i}" data-of="vol" value="${o.vol}" placeholder="48"></div>
+      <div><input type="number" min="0" data-oi="${i}" data-of="max" value="${o.max}" placeholder="2"></div>
+      <div><input type="number" min="0" step="0.01" data-oi="${i}" data-of="cpl" value="${o.cpl}" placeholder="105"></div>
+      <div class="ot-t" id="ot-total-${i}">${lineTotal(o)?money(lineTotal(o)):'—'}</div>
+      <div>${OUTCOMES.length>1?`<button type="button" class="ot-x" onclick="delOutcome(${i})" title="Remove">×</button>`:''}</div>
+    </div>`).join('');
+  const foot=`<div class="ot-r ot-f">
+      <div>${OUTCOMES.length} outcome${OUTCOMES.length>1?'s':''}</div><div></div>
+      <div id="ot-leads">${totalLeads()||'—'}</div><div></div>
+      <div style="text-align:right;font-size:11px;color:var(--ink3)">TOTAL</div>
+      <div class="ot-t" id="ot-value">${totalValue()?money(totalValue()):'—'}</div><div></div>
+    </div>`;
+  outTable.innerHTML=`<div class="ot">${head}${rows}${foot}</div>`;
+}
+function updateOutcomeNumbers(){
+  OUTCOMES.forEach((o,i)=>{
+    const c=document.getElementById('ot-total-'+i);
+    if(c) c.textContent = lineTotal(o)?money(lineTotal(o)):'—';
+  });
+  const l=document.getElementById('ot-leads'), val=document.getElementById('ot-value');
+  if(l) l.textContent = totalLeads()||'—';
+  if(val) val.textContent = totalValue()?money(totalValue()):'—';
+}
+outTable.addEventListener('input',e=>{
+  const t=e.target; if(t.dataset.oi===undefined) return;
+  OUTCOMES[+t.dataset.oi][t.dataset.of]=t.value;
+  updateOutcomeNumbers(); render(true);        // true = don't rebuild the table, keep focus
+});
+outTable.addEventListener('change',e=>{
+  const t=e.target; if(t.dataset.oi===undefined) return;
+  OUTCOMES[+t.dataset.oi][t.dataset.of]=t.value;
+  if(t.dataset.of==='type'){ paintOutcomes(); }
+  updateOutcomeNumbers(); render(t.dataset.of!=='type');
+});
+function addOutcome(){ OUTCOMES.push({type:'',crit:'',vol:'',max:'',cpl:''}); paintOutcomes(); render(true); }
+function delOutcome(i){ OUTCOMES.splice(i,1); paintOutcomes(); render(true); }
+paintOutcomes();
+
 /* per-function seniority matrix — state survives re-render */
 const SEN_STATE = {};           // { "IT & Technology › Cloud Engineering": Set(levels) }
 const senMatrix = document.getElementById('senMatrix');
@@ -600,7 +678,7 @@ function weeksBetween(a,b){
 }
 
 /* ---------- conditional render + gaps ---------- */
-function render(){
+function render(skipOutcomeRepaint){
   const tt=v('tgtType'), pm=v('personaMode');
   const isTAL = tt==='Targeted Account List (TAL)' || tt==='TAL + Whitespace';
   const isWS  = tt==='Whitespace Only' || tt==='TAL + Whitespace';
@@ -673,9 +751,16 @@ function render(){
     need(!v('talGeo'),'G1','TAL application across geographies','Global or market-specific?');
     need(!v('exclTrumps'),'G1','Exclusion trumps TAL','Client must answer explicitly — never defaulted');
   }
-  need(!v('lt1'),'G2','Lead type 1','Cannot price');
-  need(!v('vol'),'G2','Lead volume','Cannot price');
-  need(!v('cpl'),'G2','CPL','Cannot price');
+  const filled = OUTCOMES.filter(o=>o.type||o.vol||o.cpl);
+  need(filled.length===0,'G2','Outcomes','No lead lines entered — cannot price');
+  const noType = filled.filter(o=>!o.type).length;
+  need(noType>0,'G2','Lead type not set',`${noType} outcome row${noType>1?'s have':' has'} no lead type selected`);
+  const noVol = filled.filter(o=>o.type&&!num(o.vol)).length;
+  need(noVol>0,'G2','Volume missing',`${noVol} outcome row${noVol>1?'s have':' has'} a lead type but no volume`);
+  const noCpl = filled.filter(o=>o.type&&!num(o.cpl)).length;
+  need(noCpl>0,'G2','CPL missing',`${noCpl} outcome row${noCpl>1?'s have':' has'} a lead type but no CPL`);
+  const otherNoCrit = filled.filter(o=>o.type==='Other (provide details in notes)'&&!o.crit).length;
+  need(otherNoCrit>0,'G2','"Other" lead type undefined','Lead type is Other — the criteria field must describe what it is');
   need(!v('journey'),'G2','Lead journey after reporting','Client expectation unset');
   need(!v('kpi'),'G2','KPIs','No definition of success');
   need(!v('cplApproved'),'G3','Approved CPL','Cannot generate the IO');
@@ -695,7 +780,22 @@ function render(){
     C.push(['Whitespace with no industries','On Whitespace the industry picker <i>is</i> the selection criteria. With none selected there is no audience.']);
   if(v('end') && v('jobEnd') && new Date(v('end'))>new Date(v('jobEnd')))
     C.push(['Campaign runs past the Job','Campaign end date is after the Job end date.']);
-  const w=weeksBetween(v('start'),v('end')), n=+v('vol');
+  const w=weeksBetween(v('start'),v('end')), n=totalLeads();
+  // outcome-level checks
+  const types = OUTCOMES.map(o=>o.type).filter(Boolean);
+  const dupes = types.filter((t,i)=>types.indexOf(t)!==i);
+  if(dupes.length) C.push(['Duplicate lead types',`<b>${[...new Set(dupes)].join(', ')}</b> appears on more than one outcome row. Either merge the rows or make the criteria distinct, or the data team cannot tell them apart.`]);
+  if(OUTCOMES.filter(o=>o.type).length>2)
+    C.push(['More than two lead types',`${OUTCOMES.filter(o=>o.type).length} lead types across the outcomes. The Max Avails tab only holds Lead Type 1 and 2 — the rest live in the Outcomes related list, so make sure whoever prices this reads the related list, not just the tab.`]);
+  const cpls = OUTCOMES.filter(o=>num(o.cpl)).map(o=>num(o.cpl));
+  if(cpls.length>1 && Math.max(...cpls)/Math.min(...cpls)>=8)
+    C.push(['Wide CPL spread',`CPLs range from ${money(Math.min(...cpls))} to ${money(Math.max(...cpls))} — a ${(Math.max(...cpls)/Math.min(...cpls)).toFixed(0)}× spread. Worth double-checking a rate hasn't been typed into the wrong row.`]);
+  const capped = OUTCOMES.filter(o=>num(o.max)&&num(o.vol));
+  capped.forEach(o=>{
+    const accts=Math.ceil(num(o.vol)/num(o.max));
+    if(accts>0 && num(o.max)===1 && num(o.vol)>=100)
+      C.push(['One lead per account at volume',`<b>${o.type||'An outcome'}</b> needs ${num(o.vol)} leads at 1 per account — that means ${accts} distinct matched accounts. Confirm the count supports it.`]);
+  });
   if(w>0 && n>0) {
     const rate=(n/w).toFixed(1);
     if(!v('pacing')) C.push(['Pacing unstated',`Set a pacing schedule — ${n} leads across ~${w} weeks means <b>${rate}/week</b>, and without a rule it front-loads or scrambles at the end.`]);
@@ -705,8 +805,9 @@ function render(){
   const setPairs = pairsAll.filter(p=>p.levels.length);
   if(setPairs.length && setPairs.every(p=>p.levels.length===1 && p.levels[0]==='Executive/C-Level') && n>=40)
     C.push(['C-level only at volume',`Every function is set to <b>Executive/C-Level</b> alone against a ${n}-lead target. C-suite rarely carries volume — consider adding Director/Head, or expect to lean on Whitespace.`]);
-  if(senAll.includes('Practitioner/Specialist') && /bant/i.test(v('lt1')+v('lt2')))
-    C.push(['Practitioners on a BANT product',`<b>Practitioner/Specialist</b> is set on ${setPairs.filter(p=>p.levels.includes('Practitioner/Specialist')).map(p=>p.fn).join(', ')}. Practitioners rarely hold budget or authority — expect rejections on the A and B criteria.`]);
+  const qualLine = OUTCOMES.find(o=>QUALIFIED.includes(o.type) || /bant/i.test(o.crit||''));
+  if(senAll.includes('Practitioner/Specialist') && qualLine)
+    C.push(['Practitioners on a qualified lead type',`<b>Practitioner/Specialist</b> is set on ${setPairs.filter(p=>p.levels.includes('Practitioner/Specialist')).map(p=>p.fn).join(', ')}, against a <b>${qualLine.type||'BANT'}</b> line. Practitioners rarely hold budget or authority — expect rejections on qualification.`]);
   if(setPairs.length>1 && new Set(setPairs.map(p=>p.levels.join('|'))).size===1 && setPairs.length>=3)
     C.push(['Same seniority across every function',`All ${setPairs.length} functions carry identical seniority. That is fine if deliberate — but Finance and Legal usually need a higher floor than IT to be the right buyer.`]);
   const ind0=selectedIndustries();
@@ -725,8 +826,9 @@ function render(){
     C.push(['Audience spans SMB to enterprise',`Bands run from ${sz[0]} to ${sz[sz.length-1]}. A 5-person business and a 20,000-person one do not buy the same way — confirm this is deliberate, or the messaging and script will fit neither.`]);
   if(needFirmo && sz.includes('1-10') && setPairs.some(p=>p.levels.includes('Director/Head')||p.levels.includes('Executive/C-Level')))
     C.push(['Director titles at 1-10 employees','You have <b>1-10 employees</b> ticked alongside Director/Head or C-Level personas. Businesses that size rarely carry those titles — expect owner, founder or principal instead, and a thin count.']);
-  if(needFirmo && smb.length && /bant/i.test(v('lt1')+v('lt2')) && +v('cpl')>=300)
-    C.push(['High BANT CPL against SMB',`CPL of ${v('cpl')} on a BANT product with SMB bands ticked. Small businesses often fail the budget and timeline criteria — check the rate holds against the likely rejection rate.`]);
+  const pricyQual = OUTCOMES.find(o=>(QUALIFIED.includes(o.type)||/bant/i.test(o.crit||'')) && num(o.cpl)>=300);
+  if(needFirmo && smb.length && pricyQual)
+    C.push(['High CPL on a qualified line against SMB',`${pricyQual.type} at ${money(num(pricyQual.cpl))} with SMB bands ticked. Small businesses often fail budget and timeline qualification — check the rate holds against the likely rejection rate.`]);
   if(talOnly && (totalSubs>0 || sizes().length))
     C.push(['Firmographics set on a TAL-only campaign','Industries or company sizes are ticked but targeting is TAL/ABM only, so they filter nothing. Either clear them or switch to TAL + Whitespace.']);
   const lead = v('countDue') && v('start')
@@ -805,12 +907,23 @@ function buildText(){
   add('Notes to Data',v('dataNotes'));
   add('False positives to exclude (for the Boolean)', v('falsePos')||v('falsePos2')||v('falsePos3'));
   L.push(''); L.push('== TAB 3 · MAX AVAILS & PRICING ==');
-  add('Lead Type 1',v('lt1')); add('Lead Type 1 – Criteria',v('lt1crit'));
-  add('Lead Type 1 – Max Results per Account',v('lt1max'));
-  add('Lead Type 1 – CPL Request/Context',v('cpl'));
-  add('Lead Type 2',v('lt2'));
-  const tot=(+v('vol')&&+v('cpl'))?(+v('vol')*+v('cpl')).toLocaleString('en-AU'):'';
-  add('Revenue Type: Lead Generation', (v('vol')&&v('cpl'))? `${v('vol')} leads @ ${v('cpl')} ${v('ccy')} = ${tot} ${v('ccy')}`:'');
+  const fo=OUTCOMES.filter(o=>o.type||num(o.vol)||num(o.cpl));
+  if(fo.length){
+    L.push('OUTCOMES (one row per lead line — create these in the Outcomes related list)');
+    L.push('  #\tLead Type\tCriteria\tVolume\tMax/acct\tCPL\tLine total');
+    fo.forEach((o,i)=>L.push(`  ${i+1}\t${o.type||'[TYPE MISSING]'}\t${o.crit||'—'}\t${o.vol||'[?]'}\t${o.max||'—'}\t${o.cpl||'[?]'}\t${lineTotal(o)?money(lineTotal(o)):'[?]'}`));
+    L.push(`  \t\tTOTAL\t${totalLeads()}\t\t\t${money(totalValue())} ${v('ccy')}`);
+    L.push('');
+    L.push('  Max Avails tab holds only two — map the first two here:');
+    [0,1].forEach(i=>{ const o=fo[i]; if(!o) return;
+      L.push(`  Lead Type ${i+1}\t${o.type||'[MISSING]'}`);
+      L.push(`  Lead Type ${i+1} – Criteria\t${o.crit||'[MISSING]'}`);
+      L.push(`  Lead Type ${i+1} – Max Results per Account\t${o.max||'[MISSING]'}`);
+      L.push(`  Lead Type ${i+1} – CPL Request/Context\t${o.cpl||'[MISSING]'}`);
+    });
+    if(fo.length>2) L.push(`  ! ${fo.length-2} further outcome(s) exist only in the Outcomes related list.`);
+    add('Revenue Type: Lead Generation', `${totalLeads()} leads across ${fo.length} line(s) = ${money(totalValue())} ${v('ccy')}`);
+  } else L.push('OUTCOMES\t[MISSING]');
   add('Lead Journey After Reporting',v('journey')); add('KPIs',v('kpi'));
   add('Approved CPL with Notes',v('cplApproved')); add('Max Volume Notes',v('volNotes'));
   add('Description of Program',v('desc'));
